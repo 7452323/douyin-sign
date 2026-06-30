@@ -237,7 +237,7 @@ def sign_web_request(
     if cookie:
         headers["Cookie"] = cookie
 
-    resp = httpx.get(full_url, headers=headers, timeout=30)
+    resp = httpx.request(method=method, url=full_url, headers=headers, timeout=30)
     resp.raise_for_status()
     return resp.json()
 
