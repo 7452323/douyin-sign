@@ -249,17 +249,16 @@ async def register_device(
             )
 
         data = resp.json()
-        if data.get("status_code") != 0:
-            raise RuntimeError(
-                f"device register error: {data.get('status_msg', data.get('description', ''))}"
-            )
+        device_id = data.get("device_id", 0)
+        if not data.get("status_code", 1) and device_id not in (0, "0", None, ""):
+            # 注册成功 → 用真实值覆盖设备
+            d.device_id = str(device_id)
+            d.install_id = str(data.get("install_id", d.install_id))
+            d.iid = str(data.get("iid", d.iid))
+            return d
 
-        # 注册成功 → 用真实值覆盖设备
-        d.device_id = str(data.get("device_id", d.device_id))
-        d.install_id = str(data.get("install_id", d.install_id))
-        d.iid = str(data.get("iid", d.iid))
-
-        return d
+        print(f"[device] registration failed (device_id={device_id}), fallback to seed")
+        return make_seed_device()
 
     finally:
         if close_client:
