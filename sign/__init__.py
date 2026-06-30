@@ -183,4 +183,66 @@ def make_x_argus_default(
     )
 
 
-__all__ = ["sign_all", "sign_mobile_request", "Device", "register_device", "make_seed_device"]
+def sign_web_request(
+    path: str = "",
+    params: dict = None,
+    user_agent: str = None,
+    cookie: str = "",
+    method: str = "GET",
+) -> dict:
+    """向 Web API 发签名请求（用 X-Bogus）。
+
+    走 ``www.douyin.com/aweme/v1/web/`` 端点，兼容你现在的 API。
+
+    Args:
+        path:       API 路径，如 ``/aweme/v1/web/aweme/post/``
+        params:     URL 查询参数 dict
+        user_agent: 浏览器 UA（缺省用 Chrome 120）
+        cookie:     Cookie 字符串
+        method:     HTTP method（默认 GET）
+
+    Returns:
+        响应 JSON（dict）
+
+    Examples:
+        >>> result = sign_web_request(
+        ...     "/aweme/v1/web/aweme/post/",
+        ...     params={"sec_user_id": "MS4wLjAB...", "count": "6"},
+        ... )
+        >>> result["aweme_list"]
+    """
+    import httpx
+    from .bogus import sign_full
+
+    if user_agent is None:
+        user_agent = (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 Chrome/120.0.0.0"
+        )
+
+    qs = "&".join(f"{k}={v}" for k, v in (params or {}).items())
+    base_url = f"https://www.douyin.com{path}"
+
+    if qs:
+        # sign_full 返回 "params&X-Bogus=xxx"
+        signed_part = sign_full(qs, user_agent)
+        full_url = f"{base_url}?{signed_part}"
+    else:
+        full_url = base_url
+
+    headers = {
+        "User-Agent": user_agent,
+        "Referer": "https://www.douyin.com/",
+    }
+    if cookie:
+        headers["Cookie"] = cookie
+
+    resp = httpx.get(full_url, headers=headers, timeout=30)
+    resp.raise_for_status()
+    return resp.json()
+
+
+__all__ = [
+    "sign_all", "sign_mobile_request", "sign_web_request",
+    "Device", "register_device", "make_seed_device",
+]
