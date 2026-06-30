@@ -1,15 +1,30 @@
+"""
+TTEncrypt payload encryption.
+
+Custom AES variant with custom S-boxes and lookup tables.
+- Decrypt uses standard AES-CBC (pycryptodome)
+- Encrypt uses custom implementation with dword_0 through dword_9 lookup tables
+- Custom SHA-like hash with LIST_6B0 initial vector
+- SIMON-like block cipher (hex_0A2)
+- AES-like encrypt (hex_CF8 - 10 rounds, custom S-box)
+
+Reference: /root/tiktok-api/TTEncrypt/ttencrypt.py
+"""
+
 import binascii
 import gzip
 import random
+from Crypto.Cipher import AES as _AES
+from Crypto.Util.Padding import pad, unpad
+from typing import List
 
-from Crypto.Cipher import AES
 
-
-class TT:
+class TTEncrypt:
     __content = []
     __content_raw = []
     CF = 0
     begining = [0x74, 0x63, 0x05, 0x10, 0, 0]
+
     dword_0 = [99, 124, 119, 123, 242, 107, 111, 197, 48, 1, 103, 43, 254, 215, 171, 118, 202, 130, 201, 125, 250, 89,
                71, 240, 173, 212, 162, 175, 156, 164, 114, 192, 183, 253, 147, 38, 54, 63, 247, 204, 52, 165, 229, 241,
                113, 216, 49, 21, 4, 199, 35, 195, 24, 150, 5, 154, 7, 18, 128, 226, 235, 39, 178, 117, 9, 131, 44, 26,
@@ -22,8 +37,10 @@ class TT:
                189, 139, 138, 112, 62, 181, 102, 72, 3, 246, 14, 97, 53, 87, 185, 134, 193, 29, 158, 225, 248, 152, 17,
                105, 217, 142, 148, 155, 30, 135, 233, 206, 85, 40, 223, 140, 161, 137, 13, 191, 230, 66, 104, 65, 153,
                45, 15, 176, 84, 187, 22]
+
     dword_1 = [16777216, 33554432, 67108864, 134217728, 268435456, 536870912, 1073741824, 2147483648, 452984832,
                905969664]
+
     dword_2 = [
         0, 235474187, 470948374, 303765277, 941896748, 908933415, 607530554, 708780849, 1883793496, 2118214995,
         1817866830, 1649639237, 1215061108,
@@ -56,6 +73,7 @@ class TT:
         3776767469, 4077384432, 4245618683, 2809771154, 2842737049, 3144396420, 3043140495, 2673705150, 2438237621,
         2203032232, 2370213795,
     ]
+
     dword_3 = [
         0, 185469197, 370938394, 487725847, 741876788, 657861945, 975451694, 824852259, 1483753576, 1400783205,
         1315723890, 1164071807, 1950903388,
@@ -84,9 +102,10 @@ class TT:
         2334669897, 2149987652, 3917234703, 3799141122, 4284502037, 4100872472, 3309594171, 3460984630, 3545789473,
         3629546796, 2050466060, 1899603969, 1814803222, 1730525723, 1443857720, 1560382517, 1075025698, 1260232239,
         575138148, 692707433, 878443390, 1062597235, 243256656, 91341917, 409198410, 325965383, 3403100636, 3252238545,
-        3704300486, 3620022987, 3874428392, 3990953189, 4042459122, 4227665663, 2460449204, 2578018489, 2226875310,
+        3704300486, 3620022987, 3874428392, 3990953188, 4042459122, 4227665663, 2460449204, 2578018489, 2226875310,
         2411029155, 3198115200, 3046200461, 2827177882, 2743944855,
     ]
+
     dword_4 = [
         0, 218828297, 437656594, 387781147, 875313188, 958871085, 775562294, 590424639, 1750626376, 1699970625,
         1917742170, 2135253587, 1551124588,
@@ -118,6 +137,7 @@ class TT:
         3336358691, 3419915562, 3907448597, 3857572124, 4075877127, 4294704398, 3029510009, 3113855344, 2927934315,
         2744104290, 2159976285, 2377486676, 2594734927, 2544078150,
     ]
+
     dword_5 = [0, 151849742, 303699484, 454499602, 607398968, 758720310, 908999204, 1059270954, 1214797936, 1097159550,
                1517440620, 1400849762, 1817998408, 1699839814, 2118541908, 2001430874, 2429595872, 2581445614,
                2194319100, 2345119218, 3034881240, 3186202582, 2801699524, 2951971274, 3635996816, 3518358430,
@@ -149,6 +169,7 @@ class TT:
                4067639125, 3444575871, 3294430577, 3746175075, 3594982253, 836553431, 953270745, 600235211, 718002117,
                367585007, 484830689, 133361907, 251657213, 2041877159, 1891211689, 1806599355, 1654886325, 1568718495,
                1418573201, 1335535747, 1184342925]
+
     dword_6 = [3328402341, 4168907908, 4000806809, 4135287693, 4294111757, 3597364157, 3731845041, 2445657428,
                1613770832, 33620227, 3462883241, 1445669757, 3892248089, 3050821474, 1303096294, 3967186586, 2412431941,
                528646813, 2311702848, 4202528135, 4026202645, 2992200171, 2387036105, 4226871307, 1101901292,
@@ -179,6 +200,7 @@ class TT:
                1008606754, 361203602, 3387549984, 2278477385, 2857719295, 1344809080, 2782912378, 59542671, 1503764984,
                160008576, 437062935, 1707065306, 3622233649, 2218934982, 3496503480, 2185314755, 697932208, 1512910199,
                504303377, 2075177163, 2824099068, 1841019862, 739644986]
+
     dword_7 = [
         2781242211, 2230877308, 2582542199, 2381740923, 234877682, 3184946027, 2984144751, 1418839493, 1348481072,
         50462977, 2848876391, 2102799147, 434634494, 1656084439, 3863849899, 2599188086, 1167051466, 2636087938,
@@ -210,6 +232,7 @@ class TT:
         3664101311, 836232934, 3330556482, 3100665960, 3280093505, 2955516313, 2002398509, 287182607, 3413881008,
         4238890068, 3597515707, 975967766,
     ]
+
     dword_8 = [
         1671808611, 2089089148, 2006576759, 2072901243, 4061003762, 1807603307, 1873927791, 3310653893, 810573872,
         16974337, 1739181671, 729634347,
@@ -241,6 +264,7 @@ class TT:
         3749357023, 2358182796, 2717407649, 2306869641, 219617805, 3218761151, 3862026214, 1120306242, 1756942440,
         1103331905, 2578459033, 762796589, 252780047, 2966125488, 1425844308, 3151392187, 372911126,
     ]
+
     dword_9 = [
         1667474886, 2088535288, 2004326894, 2071694838, 4075949567, 1802223062, 1869591006, 3318043793, 808472672,
         16843522, 1734846926, 724270422,
@@ -272,14 +296,17 @@ class TT:
         3755965093, 2358021891, 2711746649, 2307489801, 218961690, 3217021541, 3873845719, 1111672452, 1751693520,
         1094828930, 2576986153, 757954394, 252645662, 2964376443, 1414855848, 3149649517, 370555436,
     ]
+
     LIST_6B0 = [4089235720, 1779033703, 2227873595, 3144134277, 4271175723, 1013904242, 1595750129, 2773480762,
                 2917565137, 1359893119, 725511199, 2600822924, 4215389547, 528734635, 327033209, 1541459225]
+
     ord_list = [
         77, 212, 194, 230, 184, 49, 98, 9, 14, 82, 179, 199, 166, 115, 59, 164, 28, 178, 70, 43, 130, 154, 181, 138, 25,
         107, 57, 219, 87, 23, 117,
         36, 244, 155, 175, 127, 8, 232, 214, 141, 38, 167, 46, 55, 193, 169, 90, 47, 31, 5, 165, 24, 146, 174, 242, 148,
         151, 50, 182, 42, 56, 170, 221, 88,
     ]
+
     rodata = [3609767458, 1116352408, 602891725, 1899447441, 3964484399, 3049323471, 2173295548, 3921009573, 4081628472,
               961987163, 3053834265, 1508970993, 2937671579, 2453635748, 3664609560, 2870763221, 2734883394, 3624381080,
               1164996542, 310598401, 1323610764, 607225278, 3590304994, 1426881987, 4068182383, 1925078388, 991336113,
@@ -298,18 +325,26 @@ class TT:
               4000239992, 4118630271, 1914138554, 116418474, 2731055270, 174292421, 3203993006, 289380356, 320620315,
               460393269, 587496836, 685471733, 1086792851, 852142971, 365543100, 1017036298, 2618297676, 1126000580,
               3409855158, 1288033470, 4234509866, 1501505948, 987167468, 1607167915, 1246189591, 1816402316]
+
     list_9C8 = []
 
-    def encrypt(self, data):
+    def __init__(self):
+        self.__content = []
+        self.__content_raw = []
+        self.CF = 0
+        self.list_9C8 = []
+
+    def encrypt(self, data) -> bytes:
         headers = [31, 139, 8, 0, 0, 0, 0, 0, 0, 0]
-        data = gzip.compress(data.encode(), compresslevel=9, mtime=0)
+        data = gzip.compress(data.encode() if isinstance(data, str) else data, compresslevel=9, mtime=0)
         data = list(data)
         self.setData(data)
         for i in range(len(headers)):
             self.__content[i] = headers[i]
-        list_0B0 = self.calculate(self.list_9C8) + self.ord_list
 
+        list_0B0 = self.calculate(self.list_9C8) + self.ord_list
         list_5D8 = self.calculate(list_0B0)
+
         list_378 = []
         list_740 = []
         for i in range(0x10):
@@ -327,21 +362,21 @@ class TT:
             list_AB0List.append(differ)
 
         list_AB0 = list_AB0List
-
         list_55C = self.hex_CF8(list_378Array)
+
         final_list = self.hex_0A2(list_AB0, list_740, list_55C)
         final_list = (self.begining + self.list_9C8) + final_list
         final_list = self.changeLongArrayTobytes(final_list)
 
         return bytes(i % 256 for i in final_list)
 
-    def decrypt(self, data):
-        #data = bytearray.fromhex(data)
+    def decrypt(self, data) -> str:
         data = list(data)
         self.setData(data)
         self.__content = self.__content_raw[38:]
         self.list_9C8 = self.__content_raw[6:38]
         self.__content = self.changeByteArrayToLong(self.__content)
+
         list_0B0 = self.calculate(self.list_9C8) + self.ord_list
         list_5D8 = self.calculate(list_0B0)
 
@@ -359,30 +394,80 @@ class TT:
         decryptedByteArray = ([0] * 16) + list(decrypted)
         toDecompress = decryptedByteArray[64:]
         result = gzip.decompress(bytes(toDecompress))
-        res= bytes(result).decode()
-        return res
+        if isinstance(result, bytes):
+            return result.decode()
+        return result
 
     def aes_decrypt(self, secretKey, encoded):
         initVector = encoded[0:16]
         data = encoded[16:]
-        decryptor = AES.new(secretKey, AES.MODE_CBC, initVector)
+        decryptor = _AES.new(secretKey, _AES.MODE_CBC, initVector)
         decoded = decryptor.decrypt(data)
         return decoded[:-decoded[-1]]
 
-    def bytearray_decode(self, arrays):
-        out = []
-        for d in arrays:
-            out.append(chr(d))
-        return "".join(out)
+    def setData(self, data):
+        self.__content_raw = data
+        self.__content = data
+        self.list_9C8 = self.hex_9C8()
 
-    def changeLongArrayTobytes(self, array):
+    def hex_9C8(self):
         result = []
-        for i in range(len(array)):
-            if array[i] > 127:
-                result.append(array[i] - 256)
-            else:
-                result.append(array[i])
+        for i in range(32):
+            result.append(self.chooice(0, 0x100))
         return result
+
+    def chooice(self, start, end):
+        return int(random.uniform(0, 1) * (end + 1 - start) + start)
+
+    def calculate(self, content: list) -> list:
+        hex_6A8 = 0
+        tmp_list = []
+        length = len(content)
+        list_6B0 = self.LIST_6B0.copy()
+
+        for item in content:
+            tmp_list.append(item)
+
+        divisible = length % 0x80
+        tmp = 0x80 - divisible
+
+        if tmp > 0x11:
+            tmp_list.append(0x80)
+            for i in range(tmp - 0x11):
+                tmp_list.append(0)
+            for j in range(16):
+                tmp_list.append(0)
+        else:
+            tmp_list.append(128)
+            for i in range(128 - 16 + tmp + 1):
+                tmp_list.append(0)
+            for j in range(16):
+                tmp_list.append(0)
+
+        tmp_list_size = len(tmp_list)
+        for i in range(tmp_list_size // 0x80):
+            if (tmp_list_size // 128 - 1) == i:
+                ending = self.handle_ending(hex_6A8, divisible)
+                for j in range(8):
+                    index = tmp_list_size - j - 1
+                    tmp_list[index] = ending[7 - j]
+
+            param_list = []
+            for j in range(32):
+                tmpss = ""
+                for k in range(4):
+                    tmp_string = self.toHex(tmp_list[0x80 * i + 4 * j + k])
+                    if len(tmp_string) < 2:
+                        tmp_string = "0" + tmp_string
+                    tmpss = tmpss + tmp_string
+                param_list.append(int(self.parseLong(tmpss, 10, 16)))
+
+            list_3B8 = self.hex_27E(param_list)
+            list_6B0 = self.hex_30A(list_6B0, list_3B8)
+            hex_6A8 += 0x400
+
+        list_8D8 = self.hex_C52(list_6B0)
+        return list_8D8
 
     def hex_0A2(self, content, list_740, list_55C):
         result = []
@@ -536,7 +621,6 @@ class TT:
             R10 = R6
             R0 = R10 >> 24
             R2 = self.dword_0[R2]
-
             R2 = int(self.parseLong(self.toHex(R2) + "000000", 10, 16))
             R9 = R10
             R3 = self.dword_0[R3]
@@ -605,202 +689,9 @@ class TT:
             list_740 = self.hex_list([R0, R1, R12, R2])
             result = result + list_740
 
-        return result  # WORKED
-
-    def calculate(self, content):
-        hex_6A8 = 0
-        tmp_list = []
-        length = len(content)
-        list_6B0 = self.LIST_6B0.copy()
-
-        for item in content:
-            tmp_list.append(item)
-
-        divisible = length % 0x80
-        tmp = 0x80 - divisible
-
-        if tmp > 0x11:
-            tmp_list.append(0x80)
-            for i in range(tmp - 0x11):
-                tmp_list.append(0)
-
-            for j in range(16):
-                tmp_list.append(0)
-        else:
-            tmp_list.append(128)
-
-            for i in range(128 - 16 + tmp + 1):
-                tmp_list.append(0)
-
-            for j in range(16):
-                tmp_list.append(0)
-
-        tmp_list_size = len(tmp_list)
-        d = tmp_list_size // 0x80
-        for i in range(tmp_list_size // 0x80):
-            if (tmp_list_size // 128 - 1) == i:
-                ending = self.handle_ending(hex_6A8, divisible)
-                for j in range(8):
-                    index = tmp_list_size - j - 1
-                    tmp_list[index] = ending[7 - j]
-
-            param_list = []
-            for j in range(32):
-                tmpss = ""
-                for k in range(4):
-                    tmp_string = self.toHex(tmp_list[0x80 * i + 4 * j + k])
-                    if len(tmp_string) < 2:
-                        tmp_string = "0" + tmp_string
-
-                    tmpss = tmpss + tmp_string
-
-                param_list.append(int(self.parseLong(tmpss, 10, 16)))
-
-            list_3B8 = self.hex_27E(param_list)
-
-            list_6B0 = self.hex_30A(list_6B0, list_3B8)
-
-            hex_6A8 += 0x400
-
-        list_8D8 = self.hex_C52(list_6B0)
-        return list_8D8
-
-    def convertLongList(self, content):
-        if len(content) == 0:
-            return []
-        result = []
-        for i in content:
-            result.append(i)
         return result
 
-    def dump_list(self, content):
-        size = len(content)
-        ssize = size // 4
-        result = []
-        for index in range(ssize):
-            tmp_string = ""
-            for j in range(4):
-                tmp = self.toHex(content[4 * index + j])
-                if len(tmp) < 2:
-                    tmp = "0" + tmp
-
-                tmp_string = tmp_string + tmp
-            i = int(self.parseLong(tmp_string, 10, 16))
-            result.append(int(i))
-        return result
-
-    def hex_CF8(self, param_list):
-        list_388 = []
-        list_378 = param_list
-        for i in range(0xA):
-            R3 = list_378[0]
-            R8 = list_378[1]
-            R9 = list_378[2]
-            R5 = list_378[3]
-            R6 = int(self.UBFX(R5, 8, 8))
-            R6 = self.dword_0[R6]
-            R6 = int(self.parseLong(self.toHex(R6) + "0000", 10, 16))
-            R4 = int(self.UBFX(R5, 0x10, 8))
-            R11 = self.dword_1[i]
-            R4 = self.dword_0[R4]
-            R4 = int(self.parseLong(self.toHex(R4) + "000000", 10, 16))
-            R3 = R3 ^ R4
-            R4 = int(self.UTFX(R5))
-            R3 = R3 ^ R6
-            R4 = self.dword_0[R4]
-            R4 = int(self.parseLong(self.toHex(R4) + "00", 10, 16))
-            R3 = R3 ^ R4
-            R4 = R5 >> 24
-            R4 = self.dword_0[R4]
-            R3 = R3 ^ R4
-            R3 = R3 ^ R11
-            R2 = R8 ^ R3
-            R4 = R9 ^ R2
-            R5 = R5 ^ R4
-            list_378 = [R3, R2, R4, R5]
-            list_388 = list_388 + list_378
-        l388l = len(list_388)
-        list_478 = []
-        for i in range(0x9):
-            R5 = list_388[l388l - 8 - 4 * i]
-            R4 = int(self.UBFX(R5, 0x10, 8))
-            R6 = R5 >> 0x18
-            R6 = self.dword_2[R6]
-            R4 = self.dword_3[R4]
-            R6 = R6 ^ R4
-            R4 = int(self.UBFX(R5, 8, 8))
-            R5 = int(self.UTFX(R5))
-            R4 = self.dword_4[R4]
-            R5 = self.dword_5[R5]
-            R6 = R6 ^ R4
-            R6 = R6 ^ R5
-            list_478.append(R6)
-            R6 = list_388[l388l - 7 - 4 * i]
-            R1 = int(self.UBFX(R6, 0x10, 8))
-            R4 = R6 >> 0x18
-            R4 = self.dword_2[R4]
-            R1 = self.dword_3[R1]
-            R1 = R1 ^ R4
-            R4 = int(self.UBFX(R6, 8, 8))
-            R4 = self.dword_4[R4]
-            R1 = R1 ^ R4
-            R4 = int(self.UTFX(R6))
-            R4 = self.dword_5[R4]
-            R1 = R1 ^ R4
-            list_478.append(R1)
-            R1 = list_388[l388l - 6 - 4 * i]
-            R6 = int(self.UBFX(R1, 0x10, 8))
-            R4 = R1 >> 0x18
-            R4 = self.dword_2[R4]
-            R6 = self.dword_3[R6]
-            R4 = R4 ^ R6
-            R6 = int(self.UBFX(R1, 8, 8))
-            R1 = int(self.UTFX(R1))
-            R6 = self.dword_4[R6]
-            R1 = self.dword_5[R1]
-            R4 = R4 ^ R6
-            R1 = R1 ^ R4
-            list_478.append(R1)
-            R0 = list_388[l388l - 5 - 4 * i]
-            R1 = int(self.UTFX(R0))
-            R4 = int(self.UBFX(R0, 8, 8))
-            R6 = R0 >> 0x18
-            R0 = int(self.UBFX(R0, 0x10, 8))
-            R6 = self.dword_2[R6]
-            R0 = self.dword_3[R0]
-            R4 = self.dword_4[R4]
-            R1 = self.dword_5[R1]
-            R0 = R0 ^ R6
-            R0 = R0 ^ R4
-            R0 = R0 ^ R1
-            list_478.append(R0)
-        list_468 = param_list + list_388
-        return list_468
-
-    def handle_ending(self, num, r0):
-        s = self.toHex(num)
-        r1 = None
-        r2 = None
-        if len(s) <= 8:
-            r1 = num
-            r2 = 0
-        else:
-            num_str = self.toHex(num)
-            length = len(num)
-            r1 = self.parseLong(num_str[:length - 8], 10, 16)
-            r2 = self.parseLong(num_str[2:length - 8], 10, 16)
-
-        r1 = self.ADDS(r1, r0 << 3)
-        r2 = self.ADC(r2, r0 >> 29)
-        a = self.hex_list([r2, r1])
-        return self.hex_list([r2, r1])
-
-    def UTFX(self, num):
-        tmp_string = self.toBinaryString(num)
-        start = len(tmp_string) - 8
-        return self.parseLong(tmp_string[start:], 10, 2)
-
-    def hex_27E(self, param_list):
+    def hex_27E(self, param_list: list) -> list:
         r6 = param_list[0]
         r8 = param_list[1]
         for i in range(0x40):
@@ -848,9 +739,9 @@ class TT:
             r3 = self.ADC(r3, lr)
             param_list = param_list + [r3, r0]
 
-        return param_list  # WORKED
+        return param_list
 
-    def hex_30A(self, param_list, list_3B8):
+    def hex_30A(self, param_list: list, list_3B8: list) -> list:
         v_3A0 = param_list[7]
         v_3A4 = param_list[6]
         v_374 = param_list[5]
@@ -867,18 +758,16 @@ class TT:
         R8 = param_list[8]
         R4 = param_list[15]
         R6 = param_list[14]
+
         for index in range(10):
             v_384 = R5
             R3 = self.rodata[0x10 * index]
             R1 = self.rodata[0x10 * index + 2]
             R2 = self.rodata[0x10 * index + 1]
             R3 = self.ADDS(R3, R6)
-
             R6 = self.check(R8) >> 14
-
             v_390 = R1
             R6 = R6 | self.check(R5) << 18
-
             R1 = self.rodata[0x10 * index + 3]
             R0 = self.rodata[0x10 * index + 4]
             v_36C = R0
@@ -1549,12 +1438,123 @@ class TT:
             param_list[2 * i + 1] = R1
         return param_list
 
-    def hex_C52(self, list_6B0):
+    def hex_CF8(self, param_list: list) -> list:
+        list_388 = []
+        list_378 = param_list
+        for i in range(0xA):
+            R3 = list_378[0]
+            R8 = list_378[1]
+            R9 = list_378[2]
+            R5 = list_378[3]
+            R6 = int(self.UBFX(R5, 8, 8))
+            R6 = self.dword_0[R6]
+            R6 = int(self.parseLong(self.toHex(R6) + "0000", 10, 16))
+            R4 = int(self.UBFX(R5, 0x10, 8))
+            R11 = self.dword_1[i]
+            R4 = self.dword_0[R4]
+            R4 = int(self.parseLong(self.toHex(R4) + "000000", 10, 16))
+            R3 = R3 ^ R4
+            R4 = int(self.UTFX(R5))
+            R3 = R3 ^ R6
+            R4 = self.dword_0[R4]
+            R4 = int(self.parseLong(self.toHex(R4) + "00", 10, 16))
+            R3 = R3 ^ R4
+            R4 = R5 >> 24
+            R4 = self.dword_0[R4]
+            R3 = R3 ^ R4
+            R3 = R3 ^ R11
+            R2 = R8 ^ R3
+            R4 = R9 ^ R2
+            R5 = R5 ^ R4
+            list_378 = [R3, R2, R4, R5]
+            list_388 = list_388 + list_378
+        l388l = len(list_388)
+        list_478 = []
+        for i in range(0x9):
+            R5 = list_388[l388l - 8 - 4 * i]
+            R4 = int(self.UBFX(R5, 0x10, 8))
+            R6 = R5 >> 0x18
+            R6 = self.dword_2[R6]
+            R4 = self.dword_3[R4]
+            R6 = R6 ^ R4
+            R4 = int(self.UBFX(R5, 8, 8))
+            R5 = int(self.UTFX(R5))
+            R4 = self.dword_4[R4]
+            R5 = self.dword_5[R5]
+            R6 = R6 ^ R4
+            R6 = R6 ^ R5
+            list_478.append(R6)
+            R6 = list_388[l388l - 7 - 4 * i]
+            R1 = int(self.UBFX(R6, 0x10, 8))
+            R4 = R6 >> 0x18
+            R4 = self.dword_2[R4]
+            R1 = self.dword_3[R1]
+            R1 = R1 ^ R4
+            R4 = int(self.UBFX(R6, 8, 8))
+            R4 = self.dword_4[R4]
+            R1 = R1 ^ R4
+            R4 = int(self.UTFX(R6))
+            R4 = self.dword_5[R4]
+            R1 = R1 ^ R4
+            list_478.append(R1)
+            R1 = list_388[l388l - 6 - 4 * i]
+            R6 = int(self.UBFX(R1, 0x10, 8))
+            R4 = R1 >> 0x18
+            R4 = self.dword_2[R4]
+            R6 = self.dword_3[R6]
+            R4 = R4 ^ R6
+            R6 = int(self.UBFX(R1, 8, 8))
+            R1 = int(self.UTFX(R1))
+            R6 = self.dword_4[R6]
+            R1 = self.dword_5[R1]
+            R4 = R4 ^ R6
+            R1 = R1 ^ R4
+            list_478.append(R1)
+            R0 = list_388[l388l - 5 - 4 * i]
+            R1 = int(self.UTFX(R0))
+            R4 = int(self.UBFX(R0, 8, 8))
+            R6 = R0 >> 0x18
+            R0 = int(self.UBFX(R0, 0x10, 8))
+            R6 = self.dword_2[R6]
+            R0 = self.dword_3[R0]
+            R4 = self.dword_4[R4]
+            R1 = self.dword_5[R1]
+            R0 = R0 ^ R6
+            R0 = R0 ^ R4
+            R0 = R0 ^ R1
+            list_478.append(R0)
+        list_468 = param_list + list_388
+        return list_468
+
+    def hex_C52(self, list_6B0: list) -> list:
         list_8D8 = []
         for i in range(8):
             tmp = self.hex_list([list_6B0[2 * i + 1], list_6B0[2 * i]])
             list_8D8 = list_8D8 + tmp
         return list_8D8
+
+    def handle_ending(self, num: int, r0: int) -> list:
+        s = self.toHex(num)
+        if len(s) <= 8:
+            r1 = num
+            r2 = 0
+        else:
+            num_str = self.toHex(num)
+            length = len(num)
+            r1 = self.parseLong(num_str[:length - 8], 10, 16)
+            r2 = self.parseLong(num_str[2:length - 8], 10, 16)
+
+        r1 = self.ADDS(r1, r0 << 3)
+        r2 = self.ADC(r2, r0 >> 29)
+        a = self.hex_list([r2, r1])
+        return self.hex_list([r2, r1])
+
+    # ---- Bit operation helpers ----
+
+    def UTFX(self, num):
+        tmp_string = self.toBinaryString(num)
+        start = len(tmp_string) - 8
+        return self.parseLong(tmp_string[start:], 10, 2)
 
     def toHex(self, num):
         return format(int(num), "x")
@@ -1570,7 +1570,7 @@ class TT:
             start = size - 8
             ss = ss[start:]
             tmp = int(self.parseLong(ss, 10, 16))
-        return tmp  # 3035769959
+        return tmp
 
     def ADDS(self, a, b):
         c = self.check(a) + self.check(b)
@@ -1585,10 +1585,9 @@ class TT:
         return self.check(a & b)
 
     def EORS(self, a, b):
-        return (self.check(a ^ b))
+        return self.check(a ^ b)
 
     def ADC(self, a, b):
-
         c = self.check(a) + self.check(b)
         d = self.check(c + self.CF)
         return d
@@ -1617,8 +1616,8 @@ class TT:
 
     def RRX(self, num):
         result = self.bin_type(num)
-        lenght = len(result)
-        s = str(self.CF) + result[:lenght - 1 - 0]
+        length = len(result)
+        s = str(self.CF) + result[:length - 1 - 0]
         return self.parseLong(s, 10, 2)
 
     def bin_type(self, num):
@@ -1640,36 +1639,65 @@ class TT:
         start = lens - lsb - width
         end = start - lsb
         a = int(self.parseLong(tmp_string[start:end - start], 10, 2))
-
         return int(self.parseLong(tmp_string[start:end - start], 10, 2))
-
-    def UFTX(self, num):
-        tmp_string = self.toBinaryString(num)
-        start = len(tmp_string) - 8
-        return self.parseLong(tmp_string[start:], 10, 2)
 
     def toBinaryString(self, num):
         return "{0:b}".format(num)
 
-    def setData(self, data):
-        self.__content_raw = data
-        self.__content = data
-        self.list_9C8 = self.hex_9C8()
+    def parseLong(self, num, to_base=10, from_base=10):
+        if isinstance(num, str):
+            n = int(num, from_base)
+        else:
+            n = int(num)
+        alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        if n < to_base:
+            return alphabet[n]
+        else:
+            return self.parseLong(n // to_base, to_base) + alphabet[n % to_base]
 
-    def hex_9C8(self):
+    def byteArray2str(self, b):
+        return binascii.hexlify(bytes(b)).decode()
+
+    def changeLongArrayTobytes(self, array):
         result = []
-        for i in range(32):
-            result.append(self.chooice(0, 0x100))
+        for i in range(len(array)):
+            if array[i] > 127:
+                result.append(array[i] - 256)
+            else:
+                result.append(array[i])
         return result
 
-    def chooice(self, start, end):
-        return int(random.uniform(0, 1) * (end + 1 - start) + start)
+    def changeByteArrayToLong(self, bytes_list):
+        result = []
+        for byte in bytes_list:
+            if byte < 0:
+                result.append(byte + 256)
+            else:
+                result.append(byte)
+        return result
 
-    def s2b(self, data):
-        arr = []
-        for i in range(len(data)):
-            arr.append(data[i])
-        return arr
+    def convertLongList(self, content):
+        if len(content) == 0:
+            return []
+        result = []
+        for i in content:
+            result.append(i)
+        return result
+
+    def dump_list(self, content):
+        size = len(content)
+        ssize = size // 4
+        result = []
+        for index in range(ssize):
+            tmp_string = ""
+            for j in range(4):
+                tmp = self.toHex(content[4 * index + j])
+                if len(tmp) < 2:
+                    tmp = "0" + tmp
+                tmp_string = tmp_string + tmp
+            i = int(self.parseLong(tmp_string, 10, 16))
+            result.append(int(i))
+        return result
 
     def hex_list(self, content):
         result = []
@@ -1684,25 +1712,14 @@ class TT:
                 result.append(int(self.parseLong(ss, 10, 16)))
         return result
 
-    def parseLong(self, num, to_base=10, from_base=10):
-        if isinstance(num, str):
-            n = int(num, from_base)
-        else:
-            n = int(num)
-        alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        if n < to_base:
-            return alphabet[n]
-        else:
-            return self.parseLong(n // to_base, to_base) + alphabet[n % to_base]
+    def s2b(self, data):
+        arr = []
+        for i in range(len(data)):
+            arr.append(data[i])
+        return arr
 
-    def byteArray2str(self, b):
-        return (binascii.hexlify(bytes(b)).decode())
-
-    def changeByteArrayToLong(self, bytes):
-        result = []
-        for byte in bytes:
-            if byte < 0:
-                result.append(byte + 256)
-            else:
-                result.append(byte)
-        return result
+    def bytearray_decode(self, arrays):
+        out = []
+        for d in arrays:
+            out.append(chr(d))
+        return "".join(out)

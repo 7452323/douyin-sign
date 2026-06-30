@@ -36,6 +36,11 @@ def node_b64(s: str) -> str:
 def reverse_node_b64(base64_str: str) -> str:
     """Reverse of node_b64."""
     s = ''
+    pad_count = base64_str.count('=')
+    base64_str = base64_str.rstrip('=')
+    # Pad back to a multiple of 4
+    while len(base64_str) % 4 != 0:
+        base64_str += 'A'
     for i in range(0, len(base64_str), 4):
         b = 0
         for j in range(4):
@@ -44,7 +49,6 @@ def reverse_node_b64(base64_str: str) -> str:
                 b += n << 6 * (3 - j)
         s += chr(b >> 16 & 0xFF) + chr(b >> 8 & 0xFF) + chr(b & 0xFF)
     s = s.rstrip('A')
-    s = s[:-len(s) % 4]
     return s
 
 

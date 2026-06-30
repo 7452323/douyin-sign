@@ -150,12 +150,21 @@ def sign(params: str, user_agent: str, timestamp: int = None) -> str:
         timestamp: Unix timestamp (optional, auto-generated if None)
 
     Returns:
-        params with &X-Bogus= appended
+        The X-Bogus value (shifted base64 string)
     """
     if timestamp is None:
         timestamp = int(time())
     bogus = _x_bogus(params, user_agent, timestamp)
     return bogus
+
+
+def sign_full(params: str, user_agent: str) -> str:
+    """Generate URL params with X-Bogus appended.
+
+    Returns:
+        params + &X-Bogus=<value>
+    """
+    return Signer.sign(params, user_agent)
 
 
 def verify_bogus(params: str, user_agent: str, bogus: str, timestamp: int = None) -> bool:
@@ -164,13 +173,13 @@ def verify_bogus(params: str, user_agent: str, bogus: str, timestamp: int = None
     Args:
         params: URL query string
         user_agent: Browser user agent string
-        bogus: The X-Bogus value to verify (20 chars)
+        bogus: The X-Bogus value to verify
         timestamp: Unix timestamp (optional, auto-generated if None)
 
     Returns:
-        True if the bogus string is valid
+        True if the bogus string is valid (matches computed value)
     """
-    if not re.match(r'^[0-9A-Za-z]{20}$', bogus):
+    if not bogus:
         return False
     if timestamp is None:
         timestamp = int(time())
