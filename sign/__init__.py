@@ -20,6 +20,8 @@ from . import aes
 from . import rc4
 from . import simon
 from . import dyn_encode
+from . import abogus
+from .abogus import abogus_sign, abogus_url
 from .device import Device, register_device, make_seed_device
 
 MOBILE_API_BASE = "https://api.douyin.com"
@@ -245,4 +247,5 @@ def sign_web_request(
 __all__ = [
     "sign_all", "sign_mobile_request", "sign_web_request",
     "Device", "register_device", "make_seed_device",
+    "abogus_sign", "abogus_url",
 ]
