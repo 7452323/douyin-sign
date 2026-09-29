@@ -21,6 +21,7 @@
 - ✅ **X-Bogus** — 网页端/轻量签名
 - ✅ **X-Gnarly** — 网页端新版签名
 - ✅ **A-Bogus** — SM3 派生的网页端签名
+- ✅ **x-secsdk-web-signature** — 网页端风控签名（ArgusSecurityPlugin）
 - ✅ **TTEncrypt** — TikTok 自定义加密算法
 
 ### 安装
@@ -93,7 +94,22 @@ constants/
 
 ### 尚未覆盖
 
-字节系较新的 `X-Medusa` / `X-Helios`（番茄小说、红果等国内 App 在用）尚未实现——本包已覆盖 TikTok 国际版移动端 4 头（Khronos / SS-STUB / Gorgon / Ladon / Argus）+ Web 端（Bogus / Gnarly / A-Bogus）+ TTEncrypt。
+字节系较新的 `X-Medusa` / `X-Helios`（番茄小说、红果等国内 App 在用）尚未实现——本包已覆盖 TikTok 国际版移动端 4 头（Khronos / SS-STUB / Gorgon / Ladon / Argus）+ Web 端（Bogus / Gnarly / A-Bogus / x-secsdk-web-signature）+ TTEncrypt。
+
+### Web 端风控签名
+
+抖音网页版对被保护的接口（`/aweme/v1/web/aweme/detail/` 等，见 `sign/websign.py` 的 `PROTECTED_PATHS_GET`）会校验 `x-secsdk-web-signature`：缺 `uifid` 头报 `403 Uifid Not Found`，有 `uifid` 但没签名报 `403 Signature Not Found`。
+
+```python
+from sign import websign_sign
+
+signed_query, sig = websign_sign("device_platform=webapp&aid=6383&aweme_id=...", uifid)
+url = "https://www.douyin.com/aweme/v1/web/aweme/detail/?" + signed_query
+```
+
+签名是 `md5(f"{uifid}_{timestamp}_{SALT}_{canonical_query}")`，`SALT` 是 secsdk VM 字符串表里的常量（`runtime_bundler_34.js`，project-id 34），**与账号无关**。三条不可省的规则：`uifid` 只在 query 里没有时才追加到末尾；`timestamp`（整秒）追加在 `uifid` 之后；**被哈希的 query 必须与线上发送的字节完全一致**。
+
+`uifid` 取自浏览器种下的 `UIFID` cookie（320 位十六进制）。它不是本地算出来的，而是 secsdk + 服务端签发的访客身份串，所以仍然需要一次真实浏览器会话来取得它。
 
 ### 版本策略
 
@@ -193,7 +209,22 @@ They are exported from `sign/device.py` (`APP_VERSIONS` / `MSSDK_VER_CODE` / `MS
 
 ### Not covered yet
 
-The newer ByteDance headers `X-Medusa` / `X-Helios` (used by domestic apps such as Fanqie Novel and Hongguo) are not implemented. Everything else is: the four international TikTok mobile headers (Khronos / SS-STUB / Gorgon / Ladon / Argus), the web signatures (Bogus / Gnarly / A-Bogus) and TTEncrypt.
+The newer ByteDance headers `X-Medusa` / `X-Helios` (used by mainland apps such as Fanqie and Hongguo) are not implemented — everything else is: the four TikTok-mobile headers (Khronos / SS-STUB / Gorgon / Ladon / Argus), the web signers (Bogus / Gnarly / A-Bogus / x-secsdk-web-signature) and TTEncrypt.
+
+### The web risk-control signature
+
+Douyin's web front end sign-protects a subset of its API (see `PROTECTED_PATHS_GET` in `sign/websign.py`). A request without `x-secsdk-web-signature` is refused with `403 Blocked by ArgusSecurityPlugin Signature Not Found`; without the `uifid` header it fails one step earlier, with `... Uifid Not Found`.
+
+```python
+from sign import websign_sign
+
+signed_query, sig = websign_sign("device_platform=webapp&aid=6383&aweme_id=...", uifid)
+url = "https://www.douyin.com/aweme/v1/web/aweme/detail/?" + signed_query
+```
+
+The signature is `md5(f"{uifid}_{timestamp}_{SALT}_{canonical_query}")`, where `SALT` is a constant in secsdk's VM string table (`runtime_bundler_34.js`, project-id 34) and is **not bound to an account**. Three rules that are not optional: `uifid` is appended to the end of the query only when it is not already there; `timestamp` (whole seconds) goes after it; and **the query that is hashed must be byte-identical to the query on the wire**.
+
+`uifid` comes from the `UIFID` cookie a browser session mints (320 hex characters). It is not computed locally — secsdk and the server issue it — so one real browser session is still needed to obtain it.
 
 ### Versioning Policy
 

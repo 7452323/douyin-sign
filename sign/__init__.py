@@ -22,6 +22,8 @@ from . import simon
 from . import dyn_encode
 from . import abogus
 from .abogus import abogus_sign, abogus_url
+from . import websign
+from .websign import websign_sign, canonical_query, is_protected
 from .device import Device, register_device, make_seed_device
 
 MOBILE_API_BASE = "https://api.douyin.com"
