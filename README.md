@@ -91,6 +91,10 @@ constants/
 
 以上在 `sign/device.py` 中导出（`APP_VERSIONS` / `MSSDK_VER_CODE` / `MSSDK_VER_STR` / `LICENSE_ID` / `APP_ID`）。
 
+### 尚未覆盖
+
+字节系较新的 `X-Medusa` / `X-Helios`（番茄小说、红果等国内 App 在用）尚未实现——本包已覆盖 TikTok 国际版移动端 4 头（Khronos / SS-STUB / Gorgon / Ladon / Argus）+ Web 端（Bogus / Gnarly / A-Bogus）+ TTEncrypt。
+
 ### 版本策略
 
 本包的版本号跟随抖音/TikTok 的 App 版本号（如 `38.3.0`）。初始版本为 `1.0.0`。当 TikTok App 发布新版本时，`update.py` 脚本可用于自动提取并更新常量。
@@ -186,6 +190,10 @@ Current v46 parameters:
 | `aid` | `1233` |
 
 They are exported from `sign/device.py` (`APP_VERSIONS` / `MSSDK_VER_CODE` / `MSSDK_VER_STR` / `LICENSE_ID` / `APP_ID`).
+
+### Not covered yet
+
+The newer ByteDance headers `X-Medusa` / `X-Helios` (used by domestic apps such as Fanqie Novel and Hongguo) are not implemented. Everything else is: the four international TikTok mobile headers (Khronos / SS-STUB / Gorgon / Ladon / Argus), the web signatures (Bogus / Gnarly / A-Bogus) and TTEncrypt.
 
 ### Versioning Policy
 
