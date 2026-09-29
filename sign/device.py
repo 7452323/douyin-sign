@@ -27,8 +27,21 @@ DEVICE_MODELS = [
     "Pixel 9 Pro", "Pixel 8 Pro",
 ]
 DEVICE_BRANDS = ["samsung", "apple", "google"]
-OS_VERSIONS = ["30", "31", "32", "33", "34", "14.0", "14.1"]
-APP_VERSIONS = ["38.5.0", "39.0.0", "39.5.0"]
+OS_VERSIONS = ["33", "34", "35", "36", "17.0", "18.0", "18.2"]
+# App versions seen in the wild: 38.x/39.x are the builds the constants were
+# originally extracted from, 46.x/47.x are current. The signing constants did
+# not move across them (see README "Constants hardening"), so the newest
+# version is the sane default.
+APP_VERSIONS = ["46.0.42", "47.1.4", "39.5.0", "38.5.0"]
+
+# MSSDK / licence parameters X-Argus has to carry. A mismatch here fails
+# silently — the signature looks well-formed and risk control just returns an
+# empty result set. `mssdk_ver_code` is the discriminator: it changes when the
+# native MSSDK changes, which is also when the static sign key can go stale.
+APP_ID = 1233
+MSSDK_VER_CODE = 83952160
+MSSDK_VER_STR = "v05.01.02-alpha.7-ov-android"
+LICENSE_ID = 2142840551
 
 DEVICE_REGISTER_URL = "https://log.snssdk.com/service/2/device_register/"
 MOBILE_API_BASE = "https://api.douyin.com"

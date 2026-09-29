@@ -13,12 +13,14 @@
 
 ### 功能特性
 
-- ✅ **X-Gorgon** — 请求签名 (0404/0405/0407 等版本)
-- ✅ **X-Argus** — 风控/设备指纹签名
+- ✅ **X-Gorgon** — 请求签名（`8404a0ae1000` arm64 / `0404a0ae1000` arm 前缀）
+- ✅ **X-Argus** — 风控/设备指纹签名（protobuf + SIMON + AES）
 - ✅ **X-Ladon** — 附加风控签名
 - ✅ **X-Khronos** — 请求时间戳签名
 - ✅ **X-SS-STUB** — 请求体 MD5 摘要签名
 - ✅ **X-Bogus** — 网页端/轻量签名
+- ✅ **X-Gnarly** — 网页端新版签名
+- ✅ **A-Bogus** — SM3 派生的网页端签名
 - ✅ **TTEncrypt** — TikTok 自定义加密算法
 
 ### 安装
@@ -71,6 +73,24 @@ constants/
 
 若要恢复自动提取，需要先对 `libmetasec_ov.so` 内的加密载荷脱壳（Skanda/komprese 壳），或改用仍含明文常量的版本作为来源。
 
+### 常量何时会失效
+
+`sign_key.b64` / `gorgon_table.hex` 是**静态**的：它们来自某个 `libmetasec_ov.so` 构建，**不随 App 版本号走，只随 native MSSDK 变**。判据是 `mssdk_ver_code`——当前 `83952160` 在 37.x 与 46.x 之间共享，所以这组常量在 4x 上依然有效（已由第三方在 v46 上实测：连续 15 次搜索全部成功、150 条结果）。
+
+失效是**静默**的：签名格式完全合法、HTTP 200，风控只是返回空结果。判别方法：把签名切到任一线下服务跑同一条请求——付费签名也空 → 身份/风控问题；只有本地签名空 → 常量过期。
+
+当前参数（v46）：
+
+| 参数 | 值 |
+|---|---|
+| `app_version` | `46.0.42` |
+| `mssdk_ver_code` | `83952160` |
+| `mssdk_ver_str` | `v05.01.02-alpha.7-ov-android` |
+| `license_id` | `2142840551` |
+| `aid` | `1233` |
+
+以上在 `sign/device.py` 中导出（`APP_VERSIONS` / `MSSDK_VER_CODE` / `MSSDK_VER_STR` / `LICENSE_ID` / `APP_ID`）。
+
 ### 版本策略
 
 本包的版本号跟随抖音/TikTok 的 App 版本号（如 `38.3.0`）。初始版本为 `1.0.0`。当 TikTok App 发布新版本时，`update.py` 脚本可用于自动提取并更新常量。
@@ -89,12 +109,14 @@ MIT
 
 ### Features
 
-- ✅ **X-Gorgon** — Request signing (0404/0405/0407 variants)
-- ✅ **X-Argus** — Risk control / device fingerprint signing
+- ✅ **X-Gorgon** — Request signing (`8404a0ae1000` arm64 / `0404a0ae1000` arm prefix)
+- ✅ **X-Argus** — Risk control / device fingerprint signing (protobuf + SIMON + AES)
 - ✅ **X-Ladon** — Additional risk control signature
 - ✅ **X-Khronos** — Request timestamp signature
 - ✅ **X-SS-STUB** — Request body MD5 digest signature
 - ✅ **X-Bogus** — Web / lightweight signature
+- ✅ **X-Gnarly** — Newer web signature
+- ✅ **A-Bogus** — SM3-derived web signature
 - ✅ **TTEncrypt** — TikTok custom encryption algorithm
 
 ### Installation
@@ -146,6 +168,24 @@ Since the TikTok 4x builds the constants are no longer extractable as plaintext:
 - it **never guesses**: a candidate is written back only when it matches the shipped value byte for byte, otherwise candidates are printed for manual review — a single wrong byte breaks every signature.
 
 Restoring automatic extraction means unpacking the encrypted payload inside `libmetasec_ov.so` (Skanda/komprese) or sourcing constants from a build that still ships them in plaintext.
+
+### When the constants go stale
+
+`sign_key.b64` / `gorgon_table.hex` are **static**: they come from one specific `libmetasec_ov.so` build and do **not** follow the app version number — they follow the native MSSDK. The discriminator is `mssdk_ver_code`; the current `83952160` is shared between the 37.x and 46.x builds, which is why this pair still signs v46 traffic (third-party measurement: 15/15 consecutive searches, 150 records, zero rejects).
+
+Staleness is **silent**: the signature stays well-formed, the request returns HTTP 200, and risk control simply hands back an empty result set. To tell it apart from an identity block, sign the same request through a hosted signer: empty there too → identity; empty only locally → stale key.
+
+Current v46 parameters:
+
+| Parameter | Value |
+|---|---|
+| `app_version` | `46.0.42` |
+| `mssdk_ver_code` | `83952160` |
+| `mssdk_ver_str` | `v05.01.02-alpha.7-ov-android` |
+| `license_id` | `2142840551` |
+| `aid` | `1233` |
+
+They are exported from `sign/device.py` (`APP_VERSIONS` / `MSSDK_VER_CODE` / `MSSDK_VER_STR` / `LICENSE_ID` / `APP_ID`).
 
 ### Versioning Policy
 

@@ -56,9 +56,24 @@ def _load_json_file(filename: str) -> dict:
 
 def get_sign_key() -> bytes:
     """
-    Get the sign key from constants/current/ or return default.
-    Expected file: sign_key.hex containing base64 string or hex bytes.
+    Get the sign key from constants/current/ or return the built-in default.
+
+    `sign_key.b64` is what update.py writes and what ships in the repo;
+    `sign_key.hex` / `sign_key.json` are kept for compatibility.
     """
+    # sign_key.b64 — base64 text
+    path = os.path.join(_CONSTANTS_DIR, 'sign_key.b64')
+    if os.path.isfile(path):
+        with open(path, 'r') as f:
+            b64 = f.read().strip()
+        if b64:
+            try:
+                key = base64.b64decode(b64, validate=True)
+                if len(key) == 32:
+                    return key
+            except Exception:
+                pass
+
     # Try sign_key.hex first (hex format)
     hex_data = _load_hex_file('sign_key.hex')
     if hex_data:

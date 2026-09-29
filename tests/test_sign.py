@@ -157,3 +157,39 @@ def test_constants_protobuf_fields():
     assert len(values) == len(set(values)), (
         "Duplicate protobuf field numbers detected"
     )
+
+
+def test_get_sign_key_reads_the_b64_file():
+    """get_sign_key() must load constants/current/sign_key.b64, not the fallback."""
+    import base64
+
+    from sign import constants as const
+
+    key = const.get_sign_key()
+    shipped = base64.b64decode((CONSTANTS_CURRENT / "sign_key.b64").read_text().strip())
+    assert key == shipped, "get_sign_key() ignored sign_key.b64"
+    assert len(key) == 32
+
+
+def test_x_gorgon_known_vectors():
+    """
+    X-Gorgon must stay byte-identical to the reference implementation.
+
+    Vectors cross-checked against armxe/tiktok-api's independent
+    gorgon_encode (Metasec.gorgon — same 20-byte buffer, table, nibble swap,
+    bit-reverse). A drift here means every signature the package makes is
+    silently invalid.
+    """
+    from sign.gorgon import make_x_gorgon
+
+    assert make_x_gorgon(
+        b"aid=1233&version_code=460042", b'{"x":1}', b"sessionid=abc", 1760000000, True
+    ) == "8404a0ae10001ca53c08f5de7d51c37b47ea6154771020cbb50b"
+
+    assert make_x_gorgon(b"", b"", b"", 1700000000, False) == (
+        "0404a0ae1000e2eae21d5c84d8db89df6506615477a00688ac74"
+    )
+
+    assert make_x_gorgon(
+        b"a=1&b=2&c=3&d=4&e=5", b"", b"k=v", 1799999999, True
+    ) == "8404a0ae100036ad4e5b5c84d80d587a8306615477d0590913a0"
