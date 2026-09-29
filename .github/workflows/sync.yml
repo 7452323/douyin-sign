@@ -35,7 +35,9 @@ jobs:
       - name: Check for changes
         id: check_changes
         run: |
-          if [ -n "$(git status --porcelain constants/)" ]; then
+          # Only real constant moves count: apk_version.txt / last-check.json
+          # change every run and must not open a PR.
+          if [ -n "$(git status --porcelain constants/current/sign_key.b64 constants/current/gorgon_table.hex)" ]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "Constants have changed."
           else

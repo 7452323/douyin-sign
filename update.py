@@ -65,31 +65,76 @@ UA = (
 TAIL_WINDOW = 131072
 
 
+APKCOMBO_PAGES = [
+    # Fallback sources: APKPure's edge rejects some CI IP ranges, these pages
+    # still expose a direct storage link.
+    "https://apkcombo.com/tiktok/com.zhiliaoapp.musically/download/apk",
+]
+
+
+def _version_from_url(url):
+    m = re.search(r"_([0-9]+\.[0-9][0-9.]*)_", url) or re.search(
+        r"/([0-9]+\.[0-9][0-9.]*)/", url
+    )
+    return m.group(1) if m else "unknown"
+
+
+def _probe(url, label):
+    """Range-probe a candidate URL; returns (final_url, size, version) or raises."""
+    req = urllib.request.Request(url, headers={"User-Agent": UA, "Range": "bytes=0-0"})
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        final = resp.geturl()
+        cr = resp.headers.get("Content-Range", "")
+        size = int(cr.split("/")[-1]) if "/" in cr else int(
+            resp.headers.get("Content-Length") or 0
+        )
+    if size < 10 * 1024 * 1024:
+        raise RuntimeError(f"unexpected size {size}")
+    version = _version_from_url(final)
+    print(f"[*] APK source resolved ({label}): {version} ({size} bytes)")
+    return final, size, version
+
+
 def resolve_apk_source():
     """
-    Follow the mirror redirect to the CDN URL.
+    Resolve the latest TikTok APK to (url, size, version).
 
-    Returns (url, size, version) or (None, 0, "") when every source fails.
-    The version is parsed out of the CDN filename, which looks like
-    "TikTok - Videos, Shop & LIVE_47.1.4_APKPure.apk".
+    Primary route: APKPure's direct endpoint 302s to a signed CDN link.
+    Fallback: scrape an APKCombo download page for its storage link, since
+    APKPure blocks some CI IP ranges with a 403.
     """
     for src in APK_SOURCES:
         try:
-            req = urllib.request.Request(
-                src, headers={"User-Agent": UA, "Range": "bytes=0-0"}
-            )
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                final = resp.geturl()
-                cr = resp.headers.get("Content-Range", "")
-                size = int(cr.split("/")[-1]) if "/" in cr else int(
-                    resp.headers.get("Content-Length") or 0
-                )
-            m = re.search(r"_([0-9]+\.[0-9][0-9.]*)_", final)
-            version = m.group(1) if m else "unknown"
-            print(f"[*] APK source resolved: {version} ({size} bytes)")
-            return final, size, version
+            return _probe(src, "apkpure")
         except Exception as exc:
             print(f"[!] {src}: {exc}")
+
+    for page in APKCOMBO_PAGES:
+        try:
+            req = urllib.request.Request(
+                page,
+                headers={
+                    "User-Agent": UA,
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Accept": "text/html,application/xhtml+xml",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                html = resp.read().decode("utf-8", "replace")
+            m = re.search(
+                r"https://[a-z0-9.\-]+\.r2\.cloudflarestorage\.com/[^\"'\\ ]{20,}", html
+            )
+            if not m:
+                m2 = re.search(r"/r2\?u=([^\"&]{20,})", html)
+                if not m2:
+                    raise RuntimeError("no storage link found on page")
+                link = "https://apkcombo.com/r2?u=" + m2.group(1)
+            else:
+                link = m.group(0)
+            return _probe(link, "apkcombo")
+        except Exception as exc:
+            print(f"[!] {page}: {exc}")
+
     print("[!] No APK source reachable.")
     return None, 0, ""
 
